@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/mail"
+	"regexp"
 	"strings"
 	"time"
 
@@ -174,9 +174,14 @@ func (as *AuthService) issueSession(ctx context.Context, userID, email string, e
 	}, nil
 }
 
+var emailPattern = regexp.MustCompile(`^[a-z0-9!#$%&'*+/=?^_{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$`)
+
 func normalizeEmail(raw string) (string, error) {
 	email := strings.ToLower(strings.TrimSpace(raw))
-	if _, err := mail.ParseAddress(email); err != nil {
+	if len(email) > maxEmailLen || !emailPattern.MatchString(email) {
+		return "", common.ErrEmailInvalid
+	}
+	if strings.IndexByte(email, '@') > maxLocalPartLen {
 		return "", common.ErrEmailInvalid
 	}
 	return email, nil
