@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/codebyallan/auth-api/internal/auth"
-	"github.com/codebyallan/auth-api/internal/platform"
 	"github.com/codebyallan/auth-api/internal/storage/postgres"
 	"github.com/codebyallan/auth-api/internal/token"
 )
@@ -23,7 +22,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	db, err := platform.NewPostgresDB(dsn)
+	db, err := postgres.NewPostgresDB(dsn)
 	if err != nil {
 		log.Fatal(err)
 	}
