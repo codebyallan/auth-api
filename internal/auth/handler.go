@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/codebyallan/auth-api/internal/common"
+	"github.com/codebyallan/auth-api/internal/httpx"
 )
 
 type AuthHandler struct {
@@ -21,7 +22,7 @@ func (ah *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	res, err := ah.authService.Register(r.Context(), req)
@@ -30,17 +31,17 @@ func (ah *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		if status == http.StatusInternalServerError {
 			log.Printf("register: %v", err)
 		}
-		writeError(w, status, message)
+		httpx.WriteError(w, status, message)
 		return
 	}
-	writeJSON(w, http.StatusCreated, res)
+	httpx.WriteJSON(w, http.StatusCreated, res)
 }
 
 func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	res, err := ah.authService.Login(r.Context(), req)
@@ -49,17 +50,17 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		if status == http.StatusInternalServerError {
 			log.Printf("login: %v", err)
 		}
-		writeError(w, status, message)
+		httpx.WriteError(w, status, message)
 		return
 	}
-	writeJSON(w, http.StatusOK, res)
+	httpx.WriteJSON(w, http.StatusOK, res)
 }
 
 func (ah *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req RefreshRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	res, err := ah.authService.Refresh(r.Context(), req.RefreshToken)
@@ -68,17 +69,17 @@ func (ah *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		if status == http.StatusInternalServerError {
 			log.Printf("refresh: %v", err)
 		}
-		writeError(w, status, message)
+		httpx.WriteError(w, status, message)
 		return
 	}
-	writeJSON(w, http.StatusOK, res)
+	httpx.WriteJSON(w, http.StatusOK, res)
 }
 
 func (ah *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req LogoutRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if err := ah.authService.Logout(r.Context(), req.RefreshToken); err != nil {
@@ -86,20 +87,10 @@ func (ah *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		if status == http.StatusInternalServerError {
 			log.Printf("logout: %v", err)
 		}
-		writeError(w, status, message)
+		httpx.WriteError(w, status, message)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func writeJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
 }
 
 func statusFor(err error) (int, string) {

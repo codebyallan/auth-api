@@ -1,8 +1,9 @@
 package token
 
 import (
-	"encoding/json"
 	"net/http"
+
+	"github.com/codebyallan/auth-api/internal/httpx"
 )
 
 type TokenHandler struct {
@@ -14,7 +15,5 @@ func NewTokenHandler(tokenService *TokenService) *TokenHandler {
 }
 
 func (th *TokenHandler) JWKS(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(th.tokenService.JWKS())
+	httpx.WriteJSON(w, http.StatusOK, th.tokenService.JWKS())
 }
