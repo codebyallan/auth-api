@@ -13,9 +13,15 @@ import (
 	"github.com/codebyallan/auth-api/internal/auth"
 	"github.com/codebyallan/auth-api/internal/storage/postgres"
 	"github.com/codebyallan/auth-api/internal/token"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("no .env file found, relying on environment variables")
+	}
+
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		log.Fatal("DATABASE_URL is required")
