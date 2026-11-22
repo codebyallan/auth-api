@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/codebyallan/auth-api/internal/auth"
@@ -57,6 +61,32 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	log.Printf("listening on %s", srv.Addr)
-	log.Fatal(srv.ListenAndServe())
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	serverErrors := make(chan error, 1)
+	go func() {
+		log.Printf("listening on %s", srv.Addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErrors <- err
+		}
+	}()
+
+	select {
+	case err := <-serverErrors:
+		log.Fatalf("server error: %v", err)
+	case <-ctx.Done():
+		log.Println("shutdown signal received, shutting down gracefully...")
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			log.Printf("graceful shutdown failed: %v", err)
+			if err := srv.Close(); err != nil {
+				log.Printf("error closing server: %v", err)
+			}
+		}
+		log.Println("server stopped successfully")
+	}
 }
