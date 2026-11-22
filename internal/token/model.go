@@ -7,10 +7,11 @@ import (
 )
 
 type TokenConfig struct {
-	Issuer         string
-	Audience       string
-	AccessTokenTTL time.Duration
-	KeyID          string
+	Issuer          string
+	Audience        string
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
+	KeyID           string
 }
 type accessClaims struct {
 	UserID string `json:"uid"`

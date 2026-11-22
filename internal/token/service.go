@@ -1,16 +1,17 @@
 package token
 
 import (
+	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"math/big"
 	"time"
 
 	"github.com/codebyallan/auth-api/internal/common"
 	"github.com/golang-jwt/jwt/v5"
 )
-
-var ()
 
 type TokenService struct {
 	tokenConfig TokenConfig
@@ -31,7 +32,10 @@ func NewTokenService(tokenConfig TokenConfig, privateKey *rsa.PrivateKey) (*Toke
 		return nil, common.ErrMissingKeyID
 	}
 	if tokenConfig.AccessTokenTTL <= 0 {
-		return nil, common.ErrInvalidTTL
+		return nil, common.ErrInvalidAccessTTL
+	}
+	if tokenConfig.RefreshTokenTTL <= 0 {
+		return nil, common.ErrInvalidRefreshTTL
 	}
 	return &TokenService{tokenConfig: tokenConfig, privateKey: privateKey}, nil
 }
@@ -60,6 +64,24 @@ func (ts *TokenService) GenerateAccessToken(userID, email string) (string, time.
 		return "", time.Time{}, err
 	}
 	return signed, expiresAt, nil
+}
+
+func (ts *TokenService) GenerateRefreshToken() (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func HashRefreshToken(rawToken string) string {
+	sum := sha256.Sum256([]byte(rawToken))
+	return hex.EncodeToString(sum[:])
+}
+
+func (ts *TokenService) GetRefreshTokenTTL() time.Duration {
+	return ts.tokenConfig.RefreshTokenTTL
 }
 
 func (ts *TokenService) JWKS() JWKS {

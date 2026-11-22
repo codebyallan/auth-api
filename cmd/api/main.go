@@ -29,19 +29,21 @@ func main() {
 	}
 	defer db.Close()
 
-	issuer, err := token.NewTokenService(token.TokenConfig{
-		Issuer:         "auth-api",
-		Audience:       "auth-api",
-		AccessTokenTTL: 15 * time.Minute,
-		KeyID:          "auth-key-1",
+	tokenService, err := token.NewTokenService(token.TokenConfig{
+		Issuer:          "auth-api",
+		Audience:        "auth-api",
+		AccessTokenTTL:  15 * time.Minute,
+		RefreshTokenTTL: 30 * (24 * time.Hour),
+		KeyID:           "auth-key-1",
 	}, privateKey)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	repo := postgres.NewUserRepo(db)
-	authHandler := auth.NewAuthHandler(auth.NewAuthService(repo, issuer))
-	tokenHandler := token.NewTokenHandler(issuer)
+	userRepo := postgres.NewUserRepo(db)
+	refreshTokenRepo := postgres.NewRefreshTokenRepo(db)
+	authHandler := auth.NewAuthHandler(auth.NewAuthService(userRepo, refreshTokenRepo, tokenService))
+	tokenHandler := token.NewTokenHandler(tokenService)
 
 	mux := http.NewServeMux()
 	authHandler.RegisterRoutes(mux)

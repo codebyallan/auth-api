@@ -56,3 +56,21 @@ func (r *UserRepo) FindByEmail(ctx context.Context, email string) (*user.User, e
 	}
 	return &u, nil
 }
+
+func (r *UserRepo) FindByID(ctx context.Context, id string) (*user.User, error) {
+	var u user.User
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, email, password_hash, created_at
+         FROM users
+         WHERE id = $1`,
+		id,
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.CreatedAt)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, common.ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find user by id: %w", err)
+	}
+	return &u, nil
+}

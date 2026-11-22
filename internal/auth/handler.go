@@ -55,6 +55,43 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
+func (ah *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	var req RefreshRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	res, err := ah.authService.Refresh(r.Context(), req.RefreshToken)
+	if err != nil {
+		status, message := statusFor(err)
+		if status == http.StatusInternalServerError {
+			log.Printf("refresh: %v", err)
+		}
+		writeError(w, status, message)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (ah *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	var req LogoutRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := ah.authService.Logout(r.Context(), req.RefreshToken); err != nil {
+		status, message := statusFor(err)
+		if status == http.StatusInternalServerError {
+			log.Printf("logout: %v", err)
+		}
+		writeError(w, status, message)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -84,6 +121,9 @@ func statusFor(err error) (int, string) {
 	}
 	if errors.Is(err, common.ErrInvalidCredentials) {
 		return http.StatusUnauthorized, common.ErrInvalidCredentials.Error()
+	}
+	if errors.Is(err, common.ErrInvalidRefreshToken) {
+		return http.StatusUnauthorized, common.ErrInvalidRefreshToken.Error()
 	}
 	return http.StatusInternalServerError, "internal server error"
 }
