@@ -27,7 +27,7 @@ func (r *UserRepo) Create(ctx context.Context, u *user.User) error {
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO users (id, email, password_hash, created_at)
          VALUES ($1, $2, $3, $4)`,
-		u.ID, u.Email, u.PasswordHash, u.CreatedAt,
+		u.ID, u.Email, u.PasswordHash, u.CreatedAt.UTC(),
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError

@@ -53,7 +53,7 @@ func (as *AuthService) Register(ctx context.Context, request RegisterRequest) (A
 		ID:           uuid.New().String(),
 		Email:        email,
 		PasswordHash: string(passwordHash),
-		CreatedAt:    time.Now().UTC(),
+		CreatedAt:    time.Now(),
 	}
 	if err := as.userRepository.Create(ctx, &newUser); err != nil {
 		return AuthResponse{}, fmt.Errorf("create user: %w", err)
@@ -100,7 +100,7 @@ func (as *AuthService) Refresh(ctx context.Context, refreshToken string) (AuthRe
 			return AuthResponse{}, fmt.Errorf("find refresh token: %w", findErr)
 		}
 		if stored.RevokedAt != nil {
-			if revokeErr := as.refreshTokenRepository.RevokeFamily(ctx, stored.FamilyID); revokeErr != nil {
+			if revokeErr := as.refreshTokenRepository.RevokeFamily(ctx, stored.FamilyID, now); revokeErr != nil {
 				return AuthResponse{}, fmt.Errorf("revoke family refresh token: %w", revokeErr)
 			}
 		}
@@ -131,7 +131,7 @@ func (as *AuthService) Logout(ctx context.Context, refreshToken string) error {
 		return fmt.Errorf("find refresh token: %w", err)
 	}
 
-	if err := as.refreshTokenRepository.RevokeFamily(ctx, stored.FamilyID); err != nil {
+	if err := as.refreshTokenRepository.RevokeFamily(ctx, stored.FamilyID, time.Now()); err != nil {
 		return fmt.Errorf("revoke family refresh token: %w", err)
 	}
 	return nil
@@ -153,7 +153,7 @@ func (as *AuthService) issueSession(ctx context.Context, userID, email string, e
 	} else {
 		familyID = *existsFamilyID
 	}
-	now := time.Now().UTC()
+	now := time.Now()
 	refreshToken := RefreshToken{
 		ID:        uuid.New().String(),
 		UserID:    userID,

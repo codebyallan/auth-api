@@ -22,6 +22,11 @@ func NewRefreshTokenRepo(db *sql.DB) *RefreshTokenRepo {
 var _ auth.RefreshTokenRepository = (*RefreshTokenRepo)(nil)
 
 func (r *RefreshTokenRepo) CreateRefreshToken(ctx context.Context, refreshToken *auth.RefreshToken) error {
+	var revokedAt any
+	if refreshToken.RevokedAt != nil {
+		t := refreshToken.RevokedAt.UTC()
+		revokedAt = t
+	}
 	_, err := r.db.ExecContext(ctx,
 		`INSERT INTO refresh_tokens (id, user_id, family_id, token_hash, expires_at, revoked_at, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -29,9 +34,9 @@ func (r *RefreshTokenRepo) CreateRefreshToken(ctx context.Context, refreshToken 
 		refreshToken.UserID,
 		refreshToken.FamilyID,
 		refreshToken.TokenHash,
-		refreshToken.ExpiresAt,
-		refreshToken.RevokedAt,
-		refreshToken.CreatedAt,
+		refreshToken.ExpiresAt.UTC(),
+		revokedAt,
+		refreshToken.CreatedAt.UTC(),
 	)
 	if err != nil {
 		return fmt.Errorf("insert refresh token: %w", err)
@@ -93,12 +98,13 @@ func (r *RefreshTokenRepo) ClaimRefreshToken(ctx context.Context, tokenHash stri
 	return refreshToken, nil
 }
 
-func (r *RefreshTokenRepo) RevokeFamily(ctx context.Context, refreshTokenFamily string) error {
+func (r *RefreshTokenRepo) RevokeFamily(ctx context.Context, refreshTokenFamily string, now time.Time) error {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE refresh_tokens
-		 SET revoked_at = now()
-		 WHERE family_id = $1
+		 SET revoked_at = $1
+		 WHERE family_id = $2
 		   AND revoked_at IS NULL`,
+		now.UTC(),
 		refreshTokenFamily,
 	)
 	if err != nil {
