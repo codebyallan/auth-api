@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/codebyallan/auth-api/internal/auth"
+	"github.com/codebyallan/auth-api/internal/cleanup"
 	"github.com/codebyallan/auth-api/internal/storage/postgres"
 	"github.com/codebyallan/auth-api/internal/token"
 	"github.com/joho/godotenv"
@@ -51,6 +53,17 @@ func main() {
 
 	userRepo := postgres.NewUserRepo(db)
 	refreshTokenRepo := postgres.NewRefreshTokenRepo(db)
+
+	cleanupInterval := durationEnv("CLEANUP_INTERVAL", 24*time.Hour)
+	expiredRetention := durationEnv("EXPIRED_TOKEN_RETENTION", 7*24*time.Hour)
+	revokedRetention := durationEnv("REVOKED_TOKEN_RETENTION", 30*24*time.Hour)
+	cleanupBatchSize := intEnv("CLEANUP_BATCH_SIZE", 1000)
+	cleanupMaxBatches := intEnv("CLEANUP_MAX_BATCHES", 100)
+	cleanupTimeout := durationEnv("CLEANUP_TIMEOUT", 5*time.Minute)
+
+	log.Printf("cleanup config: interval=%s expired_retention=%s revoked_retention=%s batch=%d max_batches=%d timeout=%s",
+		cleanupInterval, expiredRetention, revokedRetention, cleanupBatchSize, cleanupMaxBatches, cleanupTimeout)
+
 	authHandler := auth.NewAuthHandler(auth.NewAuthService(userRepo, refreshTokenRepo, tokenService))
 	tokenHandler := token.NewTokenHandler(tokenService)
 
@@ -69,6 +82,15 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	runner := cleanup.Start(ctx, refreshTokenRepo, cleanup.Config{
+		Interval:         cleanupInterval,
+		ExpiredRetention: expiredRetention,
+		RevokedRetention: revokedRetention,
+		BatchSize:        cleanupBatchSize,
+		MaxBatches:       cleanupMaxBatches,
+		Timeout:          cleanupTimeout,
+	})
 
 	serverErrors := make(chan error, 1)
 	go func() {
@@ -93,6 +115,33 @@ func main() {
 				log.Printf("error closing server: %v", err)
 			}
 		}
+		runner.Wait()
 		log.Println("server stopped successfully")
 	}
+}
+
+func durationEnv(key string, def time.Duration) time.Duration {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return def
+	}
+	v, err := time.ParseDuration(raw)
+	if err != nil || v <= 0 {
+		log.Printf("invalid %s=%q, using default %s", key, raw, def)
+		return def
+	}
+	return v
+}
+
+func intEnv(key string, def int) int {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		log.Printf("invalid %s=%q, using default %d", key, raw, def)
+		return def
+	}
+	return v
 }

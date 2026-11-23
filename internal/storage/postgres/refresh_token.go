@@ -112,3 +112,44 @@ func (r *RefreshTokenRepo) RevokeFamily(ctx context.Context, refreshTokenFamily 
 	}
 	return nil
 }
+
+func (r *RefreshTokenRepo) CleanupExpired(ctx context.Context, expiredBefore, revokedBefore time.Time, batchSize, maxBatches int) (int64, error) {
+	var total int64
+	for i := 0; i < maxBatches; i++ {
+		res1, err := r.db.ExecContext(ctx, `
+			DELETE FROM refresh_tokens
+			WHERE id IN (
+				SELECT id FROM refresh_tokens
+				WHERE expires_at < $1
+				LIMIT $2
+			)`, expiredBefore.UTC(), batchSize)
+		if err != nil {
+			return total, fmt.Errorf("delete expired batch: %w", err)
+		}
+		n1, err := res1.RowsAffected()
+		if err != nil {
+			return total, fmt.Errorf("rows affected expired: %w", err)
+		}
+
+		res2, err := r.db.ExecContext(ctx, `
+			DELETE FROM refresh_tokens
+			WHERE id IN (
+				SELECT id FROM refresh_tokens
+				WHERE revoked_at IS NOT NULL AND revoked_at < $1
+				LIMIT $2
+			)`, revokedBefore.UTC(), batchSize)
+		if err != nil {
+			return total, fmt.Errorf("delete revoked batch: %w", err)
+		}
+		n2, err := res2.RowsAffected()
+		if err != nil {
+			return total, fmt.Errorf("rows affected revoked: %w", err)
+		}
+
+		total += n1 + n2
+		if n1 < int64(batchSize) && n2 < int64(batchSize) {
+			break
+		}
+	}
+	return total, nil
+}

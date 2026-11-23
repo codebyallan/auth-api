@@ -63,6 +63,7 @@ The migrations are plain SQL files located in the `migrations/` directory and mu
 ```bash
 psql "$DATABASE_URL" -f migrations/001_create_users_table.sql
 psql "$DATABASE_URL" -f migrations/002_create_refresh_tokens_table.sql
+psql "$DATABASE_URL" -f migrations/003_add_refresh_tokens_cleanup_indexes.sql
 ```
 
 ### 5. Generate the RSA private key
@@ -85,15 +86,38 @@ The API will be available at `http://localhost:8080`.
 
 | Variable               | Description                                                          |
 | ---------------------- | -------------------------------------------------------------------- |
-| `DATABASE_URL`         | PostgreSQL connection string used by the service                     |
-| `JWT_PRIVATE_KEY_PATH` | Path to the RSA private key (PEM) used to sign the access tokens     |
+| `DATABASE_URL`               | PostgreSQL connection string used by the service                     |
+| `JWT_PRIVATE_KEY_PATH`       | Path to the RSA private key (PEM) used to sign the access tokens     |
+| `CLEANUP_INTERVAL`           | Interval between cleanup runs (Go duration, default `24h`)           |
+| `EXPIRED_TOKEN_RETENTION`    | How long to keep expired refresh tokens (Go duration, default `168h`) |
+| `REVOKED_TOKEN_RETENTION`    | How long to keep revoked refresh tokens (Go duration, default `720h`) |
+| `CLEANUP_BATCH_SIZE`         | Rows deleted per batch during cleanup (default `1000`)               |
+| `CLEANUP_MAX_BATCHES`        | Maximum batches per cleanup cycle (default `100`)                    |
+| `CLEANUP_TIMEOUT`            | Timeout for a single cleanup cycle (Go duration, default `5m`)       |
 
 Example (`.env.example`):
 
 ```env
 DATABASE_URL=postgres://user:password@localhost:5432/auth_api?sslmode=disable
 JWT_PRIVATE_KEY_PATH=./private.pem
+CLEANUP_INTERVAL=24h
+EXPIRED_TOKEN_RETENTION=168h
+REVOKED_TOKEN_RETENTION=720h
+CLEANUP_BATCH_SIZE=1000
+CLEANUP_MAX_BATCHES=100
+CLEANUP_TIMEOUT=5m
 ```
+
+## Token cleanup
+
+The service runs a background cleanup routine that removes old refresh tokens:
+
+- Runs once at startup and then every `CLEANUP_INTERVAL`.
+- Removes tokens expired for longer than `EXPIRED_TOKEN_RETENTION`.
+- Removes tokens revoked for longer than `REVOKED_TOKEN_RETENTION` (kept longer than the refresh token TTL to preserve reuse detection).
+- Deletions are performed in batches (`CLEANUP_BATCH_SIZE`, up to `CLEANUP_MAX_BATCHES` per cycle) with a per-cycle timeout (`CLEANUP_TIMEOUT`).
+
+Durations use Go's format (`24h`, `168h`, `5m`); the shorthand `d` (days) is not supported.
 
 ## Endpoints
 
