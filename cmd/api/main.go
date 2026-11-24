@@ -7,46 +7,33 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
-	"time"
 
 	"github.com/codebyallan/auth-api/internal/auth"
 	"github.com/codebyallan/auth-api/internal/cleanup"
+	"github.com/codebyallan/auth-api/internal/config"
 	"github.com/codebyallan/auth-api/internal/storage/postgres"
 	"github.com/codebyallan/auth-api/internal/token"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("no .env file found, relying on environment variables")
-	}
-
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		log.Fatal("DATABASE_URL is required")
-	}
-
-	privateKey, err := token.LoadPrivateKey(os.Getenv("JWT_PRIVATE_KEY_PATH"))
+	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	db, err := postgres.NewPostgresDB(dsn)
+	privateKey, err := token.LoadPrivateKey(cfg.PrivateKeyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	db, err := postgres.NewPostgresDB(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
-	tokenService, err := token.NewTokenService(token.TokenConfig{
-		Issuer:          "auth-api",
-		Audience:        "auth-api",
-		AccessTokenTTL:  15 * time.Minute,
-		RefreshTokenTTL: 30 * (24 * time.Hour),
-		KeyID:           "auth-key-1",
-	}, privateKey)
+	tokenService, err := token.NewTokenService(cfg.Token, privateKey)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -54,15 +41,8 @@ func main() {
 	userRepo := postgres.NewUserRepo(db)
 	refreshTokenRepo := postgres.NewRefreshTokenRepo(db)
 
-	cleanupInterval := durationEnv("CLEANUP_INTERVAL", 24*time.Hour)
-	expiredRetention := durationEnv("EXPIRED_TOKEN_RETENTION", 7*24*time.Hour)
-	revokedRetention := durationEnv("REVOKED_TOKEN_RETENTION", 30*24*time.Hour)
-	cleanupBatchSize := intEnv("CLEANUP_BATCH_SIZE", 1000)
-	cleanupMaxBatches := intEnv("CLEANUP_MAX_BATCHES", 100)
-	cleanupTimeout := durationEnv("CLEANUP_TIMEOUT", 5*time.Minute)
-
 	log.Printf("cleanup config: interval=%s expired_retention=%s revoked_retention=%s batch=%d max_batches=%d timeout=%s",
-		cleanupInterval, expiredRetention, revokedRetention, cleanupBatchSize, cleanupMaxBatches, cleanupTimeout)
+		cfg.Cleanup.Interval, cfg.Cleanup.ExpiredRetention, cfg.Cleanup.RevokedRetention, cfg.Cleanup.BatchSize, cfg.Cleanup.MaxBatches, cfg.Cleanup.Timeout)
 
 	authHandler := auth.NewAuthHandler(auth.NewAuthService(userRepo, refreshTokenRepo, tokenService))
 	tokenHandler := token.NewTokenHandler(tokenService)
@@ -72,25 +52,18 @@ func main() {
 	tokenHandler.RegisterRoutes(mux)
 
 	srv := &http.Server{
-		Addr:              ":8080",
+		Addr:              cfg.HTTP.Addr,
 		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
+		ReadTimeout:       cfg.HTTP.ReadTimeout,
+		WriteTimeout:      cfg.HTTP.WriteTimeout,
+		IdleTimeout:       cfg.HTTP.IdleTimeout,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	runner := cleanup.Start(ctx, refreshTokenRepo, cleanup.Config{
-		Interval:         cleanupInterval,
-		ExpiredRetention: expiredRetention,
-		RevokedRetention: revokedRetention,
-		BatchSize:        cleanupBatchSize,
-		MaxBatches:       cleanupMaxBatches,
-		Timeout:          cleanupTimeout,
-	})
+	runner := cleanup.Start(ctx, refreshTokenRepo, cfg.Cleanup)
 
 	serverErrors := make(chan error, 1)
 	go func() {
@@ -106,7 +79,7 @@ func main() {
 	case <-ctx.Done():
 		log.Println("shutdown signal received, shutting down gracefully...")
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.HTTP.ShutdownTimeout)
 		defer cancel()
 
 		if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -118,30 +91,4 @@ func main() {
 		runner.Wait()
 		log.Println("server stopped successfully")
 	}
-}
-
-func durationEnv(key string, def time.Duration) time.Duration {
-	raw := os.Getenv(key)
-	if raw == "" {
-		return def
-	}
-	v, err := time.ParseDuration(raw)
-	if err != nil || v <= 0 {
-		log.Printf("invalid %s=%q, using default %s", key, raw, def)
-		return def
-	}
-	return v
-}
-
-func intEnv(key string, def int) int {
-	raw := os.Getenv(key)
-	if raw == "" {
-		return def
-	}
-	v, err := strconv.Atoi(raw)
-	if err != nil || v <= 0 {
-		log.Printf("invalid %s=%q, using default %d", key, raw, def)
-		return def
-	}
-	return v
 }

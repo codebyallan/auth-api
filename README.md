@@ -80,7 +80,7 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.pem
 go run ./cmd/api
 ```
 
-The API will be available at `http://localhost:8080`.
+The API will be available at the address set by `HTTP_ADDR` (default `http://localhost:8080`).
 
 ## Environment Variables
 
@@ -88,6 +88,7 @@ The API will be available at `http://localhost:8080`.
 | ---------------------- | -------------------------------------------------------------------- |
 | `DATABASE_URL`               | PostgreSQL connection string used by the service                     |
 | `JWT_PRIVATE_KEY_PATH`       | Path to the RSA private key (PEM) used to sign the access tokens     |
+| `HTTP_ADDR`                  | HTTP server listen address (default `:8080`)                         |
 | `CLEANUP_INTERVAL`           | Interval between cleanup runs (Go duration, default `24h`)           |
 | `EXPIRED_TOKEN_RETENTION`    | How long to keep expired refresh tokens (Go duration, default `168h`) |
 | `REVOKED_TOKEN_RETENTION`    | How long to keep revoked refresh tokens (Go duration, default `720h`) |
@@ -100,6 +101,7 @@ Example (`.env.example`):
 ```env
 DATABASE_URL=postgres://user:password@localhost:5432/auth_api?sslmode=disable
 JWT_PRIVATE_KEY_PATH=./private.pem
+HTTP_ADDR=:8080
 CLEANUP_INTERVAL=24h
 EXPIRED_TOKEN_RETENTION=168h
 REVOKED_TOKEN_RETENTION=720h
@@ -107,6 +109,8 @@ CLEANUP_BATCH_SIZE=1000
 CLEANUP_MAX_BATCHES=100
 CLEANUP_TIMEOUT=5m
 ```
+
+The JWT issuer, audience, key ID and token TTLs are fixed in `internal/config` and are not configurable via environment variables.
 
 ## Token cleanup
 
@@ -118,6 +122,8 @@ The service runs a background cleanup routine that removes old refresh tokens:
 - Deletions are performed in batches (`CLEANUP_BATCH_SIZE`, up to `CLEANUP_MAX_BATCHES` per cycle) with a per-cycle timeout (`CLEANUP_TIMEOUT`).
 
 Durations use Go's format (`24h`, `168h`, `5m`); the shorthand `d` (days) is not supported.
+
+Invalid values fall back to the default and are logged at startup.
 
 ## Endpoints
 
