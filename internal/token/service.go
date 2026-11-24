@@ -18,6 +18,8 @@ type TokenService struct {
 	privateKey  *rsa.PrivateKey
 }
 
+var _ TokenRepository = (*TokenService)(nil)
+
 func NewTokenService(tokenConfig TokenConfig, privateKey *rsa.PrivateKey) (*TokenService, error) {
 	if privateKey == nil {
 		return nil, common.ErrNilPrivateKey

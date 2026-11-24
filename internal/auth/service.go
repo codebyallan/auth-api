@@ -18,11 +18,11 @@ import (
 type AuthService struct {
 	userRepository         user.UserRepository
 	refreshTokenRepository RefreshTokenRepository
-	tokenService           *token.TokenService
+	tokenRepository        token.TokenRepository
 }
 
-func NewAuthService(userRepository user.UserRepository, refreshTokenRepository RefreshTokenRepository, tokenService *token.TokenService) *AuthService {
-	return &AuthService{userRepository: userRepository, refreshTokenRepository: refreshTokenRepository, tokenService: tokenService}
+func NewAuthService(userRepository user.UserRepository, refreshTokenRepository RefreshTokenRepository, tokenRepository token.TokenRepository) *AuthService {
+	return &AuthService{userRepository: userRepository, refreshTokenRepository: refreshTokenRepository, tokenRepository: tokenRepository}
 }
 
 func (as *AuthService) Register(ctx context.Context, request RegisterRequest) (AuthResponse, error) {
@@ -138,12 +138,12 @@ func (as *AuthService) Logout(ctx context.Context, refreshToken string) error {
 }
 
 func (as *AuthService) issueSession(ctx context.Context, userID, email string, existsFamilyID *string) (AuthResponse, error) {
-	accessToken, accessExpiresAt, err := as.tokenService.GenerateAccessToken(userID, email)
+	accessToken, accessExpiresAt, err := as.tokenRepository.GenerateAccessToken(userID, email)
 	if err != nil {
 		return AuthResponse{}, fmt.Errorf("generate access token: %w", err)
 	}
 
-	rawToken, err := as.tokenService.GenerateRefreshToken()
+	rawToken, err := as.tokenRepository.GenerateRefreshToken()
 	if err != nil {
 		return AuthResponse{}, fmt.Errorf("generate refresh token: %w", err)
 	}
@@ -159,7 +159,7 @@ func (as *AuthService) issueSession(ctx context.Context, userID, email string, e
 		UserID:    userID,
 		FamilyID:  familyID,
 		TokenHash: token.HashRefreshToken(rawToken),
-		ExpiresAt: now.Add(as.tokenService.GetRefreshTokenTTL()),
+		ExpiresAt: now.Add(as.tokenRepository.GetRefreshTokenTTL()),
 		CreatedAt: now,
 	}
 	if err := as.refreshTokenRepository.CreateRefreshToken(ctx, &refreshToken); err != nil {
