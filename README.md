@@ -157,6 +157,7 @@ Creates a new user and returns a token pair.
 
 - `400 Bad Request` — invalid request body, invalid email, or invalid password
 - `409 Conflict` — email is already in use
+- `413 Request Entity Too Large` — request body exceeds 1 MiB
 - `500 Internal Server Error` — internal server error
 
 ### `POST /auth/login`
@@ -187,6 +188,7 @@ Authenticates a user and returns a token pair.
 
 - `400 Bad Request` — invalid request body
 - `401 Unauthorized` — invalid email or password
+- `413 Request Entity Too Large` — request body exceeds 1 MiB
 
 ### `POST /auth/refresh`
 
@@ -215,6 +217,7 @@ Rotates a refresh token and returns a new token pair.
 
 - `400 Bad Request` — invalid request body
 - `401 Unauthorized` — invalid refresh token
+- `413 Request Entity Too Large` — request body exceeds 1 MiB
 
 ### `POST /auth/logout`
 
@@ -233,6 +236,7 @@ Revokes a refresh token family.
 - `204 No Content` — refresh token revoked successfully
 
 - `400 Bad Request` — invalid request body
+- `413 Request Entity Too Large` — request body exceeds 1 MiB
 - `500 Internal Server Error` — internal server error
 
 ### `GET /.well-known/jwks.json`
@@ -270,14 +274,18 @@ All errors are returned as JSON in the following format:
 
 | Status | Error                          | Description                                                    |
 | ------ | ------------------------------ | -------------------------------------------------------------- |
-| 400    | `invalid request body`        | Malformed JSON body                                            |
+| 400    | `invalid request body`        | Malformed JSON body, unknown fields, or trailing data          |
 | 400    | `email invalid`                | Email format is invalid                                       |
 | 400    | `password must have at least 8 characters` | Password is shorter than 8 characters        |
 | 400    | `password must have at most 72 bytes`         | Password is longer than 72 bytes       |
 | 401    | `invalid email or password`   | Login credentials are invalid                                 |
 | 401    | `invalid refresh token`       | Refresh token is invalid, expired or already revoked          |
 | 409    | `email is already in use`     | Email is already registered                                   |
+| 413    | `request body too large`      | Request body exceeds the 1 MiB limit                          |
 | 500    | `internal server error`       | Unexpected internal error                                     |
+
+Request bodies are limited to 1 MiB and must be a single JSON object. Unknown
+fields are rejected with `400 Bad Request`.
 
 ## License
 

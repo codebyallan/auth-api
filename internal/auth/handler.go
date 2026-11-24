@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -20,9 +19,8 @@ func NewAuthHandler(authService *AuthService) *AuthHandler {
 
 func (ah *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 	res, err := ah.authService.Register(r.Context(), req)
@@ -39,9 +37,8 @@ func (ah *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 	res, err := ah.authService.Login(r.Context(), req)
@@ -58,9 +55,8 @@ func (ah *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 func (ah *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req RefreshRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 	res, err := ah.authService.Refresh(r.Context(), req.RefreshToken)
@@ -77,9 +73,8 @@ func (ah *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 func (ah *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req LogoutRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+	if err := httpx.DecodeJSON(w, r, &req); err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 	if err := ah.authService.Logout(r.Context(), req.RefreshToken); err != nil {
@@ -91,6 +86,14 @@ func (ah *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func writeDecodeError(w http.ResponseWriter, err error) {
+	if errors.Is(err, httpx.ErrBodyTooLarge) {
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, httpx.ErrBodyTooLarge.Error())
+		return
+	}
+	httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
 }
 
 func statusFor(err error) (int, string) {
