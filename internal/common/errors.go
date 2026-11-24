@@ -15,6 +15,7 @@ var (
 	ErrMissingIssuer       = errors.New("issuer is required")
 	ErrMissingAudience     = errors.New("audience is required")
 	ErrMissingKeyID        = errors.New("key id is required")
+	ErrMissingDatabaseURL  = errors.New("DATABASE_URL is required")
 	ErrMissingKeyPath      = errors.New("private key path is required")
 	ErrInvalidPrivateKey   = errors.New("invalid private key PEM")
 	ErrInvalidRefreshToken = errors.New("invalid refresh token")
